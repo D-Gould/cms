@@ -9,29 +9,68 @@ configure do
   set :session_secret, 'secret'
 end
 
-before do
-  # gives a str, the full path name upto the current folder
-  @root = File.expand_path("..", __FILE__)
-  # pulls all files from the data sub-folder
-  @files = Dir.glob(@root + "/data/*").map {|file_path| File.basename(file_path)}
+def render_markdown(path)
+  markdown = Redcarpet::Markdown.new(Redcarpet::Render::HTML)
+  markdown.render(File.read(path))
 end
 
-# helpers do
-#   markdown = Redcarpet::Markdown.new(Redcarpet::Render::HTML)
-# end
+def render_plain_text(path)
+  headers["Content-Type"] = "text/plain"
+  File.read(path)
+end
+
+def load_file_content(file_path)
+  file_type = File.extname(file_path)
+
+  case file_type
+  when ".md"
+    erb render_markdown(file_path)
+  else
+    render_plain_text(file_path)
+  end
+end
+
+def data_path
+  if ENV["RACK_ENV"] == "test"
+    File.expand_path("../test/data", __FILE__)
+  else
+    File.expand_path("../data", __FILE__)
+  end
+end
 
 get '/' do
+  pattern = File.join(data_path, "*")
+
+  @files = Dir.glob(pattern).map {|file_path| File.basename(file_path)}
   erb :index
 end
 
 get '/:file_name' do
-  if @files.include?(params[:file_name])
-    file_path = @root + "/data/" + params[:file_name]
+  file_path = File.join(data_path, params[:file_name])
 
-    headers["Content-Type"] = "text/plain"
-    File.read(file_path)
+  if File.exist?(file_path)
+    load_file_content(file_path)
   else
     session[:message] = "#{params[:file_name]} does not exist."
     redirect '/'
   end
+end
+
+get '/:file_name/edit' do
+  @file_name = params[:file_name]
+  file_path = File.join(data_path, @file_name)
+  @content = File.read(file_path)
+
+  erb :edit_file
+end
+
+post '/:file_name' do
+  file_name = params[:file_name]
+  file_path = File.join(data_path, file_name)
+  new_text = params[:new_text]
+
+  File.write(file_path, new_text)
+
+  session[:message] = "#{file_name} has been updated."
+  redirect '/'
 end
