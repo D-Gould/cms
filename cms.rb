@@ -9,6 +9,11 @@ configure do
   set :session_secret, 'secret'
 end
 
+before do
+  session[:username] ||= nil
+  session[:password] ||= nil
+end
+
 def render_markdown(path)
   markdown = Redcarpet::Markdown.new(Redcarpet::Render::HTML)
   markdown.render(File.read(path))
@@ -38,11 +43,44 @@ def data_path
   end
 end
 
-get '/' do
-  pattern = File.join(data_path, "*")
+def proper_credentials?
+  session[:username] == 'Admin' && session[:password] == 'secret'
+end
 
-  @files = Dir.glob(pattern).map {|file_path| File.basename(file_path)}
-  erb :index
+get '/users/signin' do
+  erb :signin
+end
+
+get '/' do
+    pattern = File.join(data_path, "*")
+
+    @files = Dir.glob(pattern).map {|file_path| File.basename(file_path)}
+    erb :index, :layout => true
+end
+
+post '/users/signout' do
+  session[:username] = nil
+  session[:password] = nil
+  session[:message] = "You have been signed out."
+  redirect '/'
+end
+
+post '/users/signin' do
+  session[:username] = params[:username]
+  session[:password] = params[:password]
+  if proper_credentials?
+    session[:message] = "Welcome!"
+    redirect '/'
+  else
+    session[:message] = "Invalid Credentials."
+    status 422
+    erb :signin
+  end
+
+end
+
+get '/new' do
+  erb :new
 end
 
 get '/:file_name' do
@@ -64,11 +102,34 @@ get '/:file_name/edit' do
   erb :edit_file
 end
 
+post '/new' do
+  file_name = params[:file_name]
+  file_path = File.join(data_path, file_name)
+
+  if file_name == ""
+    session[:message] = "File name required."
+    status 422
+    erb :new
+  else
+    File.write(file_path, "")
+    session[:message] = "#{file_name} was created."
+    redirect '/'
+  end
+end
+
+post '/:file_name/delete' do
+  file_name = params[:file_name]
+  file_path = File.join(data_path, file_name)
+  File.delete(file_path)
+
+  session[:message] = "#{file_name} has been deleted."
+  redirect '/'
+end
+
 post '/:file_name' do
   file_name = params[:file_name]
   file_path = File.join(data_path, file_name)
   new_text = params[:new_text]
-
   File.write(file_path, new_text)
 
   session[:message] = "#{file_name} has been updated."

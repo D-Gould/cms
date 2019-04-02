@@ -1,0 +1,14 @@
+<form action="/users/signin" method="post">
+  <div>
+  <label for="username">Username:
+  <input type="text" id="username" name="username" value="<%= session[:username] %>"/>
+  </label>
+  <br><br>
+  <label for="password">Password:
+  <input type="password" id="password" name="password">
+  </label>
+  <br>
+  <button type="submit">Sign In</button>
+  </div>
+
+</form>

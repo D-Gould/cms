@@ -15,6 +15,7 @@ class CMSTest < Minitest::Test
 
   def setup
     FileUtils.mkdir_p(data_path)
+    # post "/users/signin", username: "admin", password: "secret"
   end
 
   def teardown
@@ -31,14 +32,14 @@ class CMSTest < Minitest::Test
     create_document "about.md"
     create_document "changes.txt"
 
-    get '/'
+    get '/', username: "Admin", password: "secret"
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "about.md"
     assert_includes last_response.body, "changes.txt"
     assert_equal "text/html;charset=utf-8", last_response['Content-Type']
   end
-
+  
   def test_file
     create_document "history.txt", "This is an important history file."
 
@@ -97,5 +98,80 @@ class CMSTest < Minitest::Test
     assert_includes last_response.body, "history.txt has been updated"
 
     refute_equal original_text, File.read(File.join(data_path, "history.txt"))
+  end
+
+  def test_new_file_form
+    get '/new'
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, 'Add a new document:'
+    assert_includes last_response.body, "type=\"text\""
+    assert_includes last_response.body, "<input type=\"submit\""
+  end
+
+  def test_submit_new_file
+    post '/new', file_name: "new_file.txt"
+
+    assert_equal 302, last_response.status
+    get last_response['Location']
+    assert_includes last_response.body, "new_file.txt was created"
+    assert_includes last_response.body, "<a href=\"/new_file.txt\""
+  end
+
+  def test_submit_new_file_with_blank_name
+    post '/new', file_name: ""
+
+    assert_equal 422, last_response.status
+
+  end
+
+  def test_delete_a_file
+    create_document("dana.txt")
+
+    post '/dana.txt/delete'
+
+    assert_equal 302, last_response.status
+
+    get last_response['Location']
+    assert_includes last_response.body, "dana.txt has been deleted"
+
+    get '/'
+    refute_includes last_response.body, "dana.txt"
+  end
+
+  # test/cms_test.rb
+  def test_signin_form
+    get "/users/signin"
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "<input"
+    assert_includes last_response.body, %q(<button type="submit")
+  end
+
+  def test_signin
+    post "/users/signin", username: "Admin", password: "secret"
+    assert_equal 302, last_response.status
+
+    get last_response["Location"]
+    assert_includes last_response.body, "Welcome"
+    assert_includes last_response.body, "Signed in as Admin"
+  end
+
+  def test_signin_with_bad_credentials
+    post "/users/signin", username: "guest", password: "shhhh"
+    assert_equal 422, last_response.status
+    assert_includes last_response.body, "Invalid Credentials"
+  end
+
+  def test_signout
+    post "/users/signin", username: "Admin", password: "secret"
+    get last_response["Location"]
+    assert_includes last_response.body, "Welcome"
+
+    post "/users/signout"
+    get last_response["Location"]
+
+    assert_includes last_response.body, "You have been signed out"
+    assert_includes last_response.body, "Sign In"
   end
 end
